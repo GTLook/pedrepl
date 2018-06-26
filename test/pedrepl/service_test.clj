@@ -4,10 +4,10 @@
             [io.pedestal.http :as bootstrap]
             [pedrepl.service :as service]))
 
-(def service
+#_(def service
   (::bootstrap/service-fn (bootstrap/create-servlet service/service)))
 
-(deftest home-page-test
+#_(deftest home-page-test
   (is (=
        (:body (response-for service :get "/"))
        "Hello World!"))
@@ -22,7 +22,7 @@
         "X-Permitted-Cross-Domain-Policies" "none"
         "Content-Security-Policy" "object-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'strict-dynamic' https: http:;"})))
 
-(deftest about-page-test
+#_(deftest about-page-test
   (is (.contains
        (:body (response-for service :get "/about"))
        "Clojure 1.9"))
@@ -36,4 +36,3 @@
         "X-Download-Options" "noopen"
         "X-Permitted-Cross-Domain-Policies" "none"
         "Content-Security-Policy" "object-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'strict-dynamic' https: http:;"})))
-

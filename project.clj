@@ -22,6 +22,7 @@
   ;:java-agents [[org.mortbay.jetty.alpn/jetty-alpn-agent "2.0.5"]]
   :profiles {:dev {:aliases {"run-dev" ["trampoline" "run" "-m" "pedrepl.server/run-dev"]}
                    :dependencies [[io.pedestal/pedestal.service-tools "0.5.4"]]}
+             :repl {:source-paths ["dev"] :dependencies [[reloaded.repl "0.2.4"]]}
              :uberjar {:aot [pedrepl.server]}}
-  :main ^{:skip-aot true} pedrepl.server)
-
+   ; :main ^{:skip-aot true} pedrepl.server
+   )

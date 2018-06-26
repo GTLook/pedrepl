@@ -1,6 +1,8 @@
 (ns pedrepl.service
   (:require [io.pedestal.http :as http]
+            [com.stuartsierra.component :as component]
             [io.pedestal.http.route :as route]
+            [io.pedestal.interceptor :as interceptor]
             [io.pedestal.http.body-params :as body-params]
             [ring.util.response :as ring-resp]))
 
@@ -12,7 +14,13 @@
 
 (defn home-page
   [request]
-  (ring-resp/response "Hello Pedestal User"))
+  (println "something")
+  (ring-resp/response "Hello User!"))
+
+(defn increment
+  [request]
+  (ring-resp/response (str #_(swap! counter inc))))
+
 
 ;; Defines "/" and "/about" routes with their associated :get handlers.
 ;; The interceptors defined after the verb map (e.g., {:get home-page}
@@ -20,59 +28,72 @@
 (def common-interceptors [(body-params/body-params) http/html-body])
 
 ;; Tabular routes
-(def routes #{["/" :get (conj common-interceptors `home-page)]
-              ["/about" :get (conj common-interceptors `about-page)]})
+(defn make-routes
+  [ctx]
+  (route/expand-routes
+      #{["/" :get home-page :route-name :home]
+        ["/about" :get `about-page]}))
 
 ;; Map-based routes
 ;(def routes `{"/" {:interceptors [(body-params/body-params) http/html-body]
 ;                   :get home-page
 ;                   "/about" {:get about-page}}})
 
-;; Terse/Vector-based routes
-;(def routes
-;  `[[["/" {:get home-page}
-;      ^:interceptors [(body-params/body-params) http/html-body]
-;      ["/about" {:get about-page}]]]])
+; Terse/Vector-based routes
+; (defn make-routes
+;   [ctx]
+;  (route/expand-routes
+;     [["/" {:get home-page}
+;       ;^:interceptors [(body-params/body-params) http/html-body]
+;      ["/about" {:get about-page}]
+;      ["/increment" {:get increment}]]]))
 
 
 ;; Consumed by pedrepl.server/create-server
 ;; See http/default-interceptors for additional options you can configure
-(def service {:env :prod
-              ;; You can bring your own non-default interceptors. Make
-              ;; sure you include routing and set it up right for
-              ;; dev-mode. If you do, many other keys for configuring
-              ;; default interceptors will be ignored.
+(def service-base {:env :prod
               ;; ::http/interceptors []
-              ::http/routes routes
-
-              ;; Uncomment next line to enable CORS support, add
-              ;; string(s) specifying scheme, host and port for
-              ;; allowed source(s):
-              ;;
-              ;; "http://localhost:8080"
-              ;;
-              ;;::http/allowed-origins ["scheme://host:port"]
-
-              ;; Tune the Secure Headers
-              ;; and specifically the Content Security Policy appropriate to your service/application
-              ;; For more information, see: https://content-security-policy.com/
-              ;;   See also: https://github.com/pedestal/pedestal/issues/499
-              ;;::http/secure-headers {:content-security-policy-settings {:object-src "'none'"
-              ;;                                                          :script-src "'unsafe-inline' 'unsafe-eval' 'strict-dynamic' https: http:"
-              ;;                                                          :frame-ancestors "'none'"}}
-
               ;; Root for resource interceptor that is available by default.
               ::http/resource-path "/public"
-
-              ;; Either :jetty, :immutant or :tomcat (see comments in project.clj)
-              ;;  This can also be your own chain provider/server-fn -- http://pedestal.io/reference/architecture-overview#_chain_provider
               ::http/type :jetty
-              ;;::http/host "localhost"
+            ;;::http/host "localhost"
               ::http/port 8080
+              ::http/join? false
               ;; Options to pass to the container (Jetty)
               ::http/container-options {:h2c? true
                                         :h2? false
-                                        ;:keystore "test/hp/keystore.jks"
-                                        ;:key-password "password"
-                                        ;:ssl-port 8443
                                         :ssl? false}})
+
+
+
+  (defrecord Pedestal [data-source service]
+    component/Lifecycle
+
+    (start
+      [this]
+      (if service
+        this
+          (let [config (merge service-base this),
+          db-interceptor
+          (interceptor/interceptor {:name :database-interceptor
+          :enter
+          (fn [context]
+            (println "something else")
+            (update context :request assoc :data-source data-source))})
+              routes (make-routes config)
+              service (-> config (assoc ::http/routes routes ::http/interceptors [db-interceptor])
+               http/default-interceptors
+               http/create-server
+               http/start)]
+            (assoc this :service service))))
+
+    (stop
+      [this]
+      (when (and service (not (= :test (:env this))))
+        (http/stop service))
+        (assoc this :service nil)))
+
+  ;constructor function
+  (defn new-pedestal
+    []
+    (map->Pedestal {}))
